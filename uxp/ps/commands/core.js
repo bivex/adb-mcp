@@ -337,6 +337,7 @@ const createDocument = async (command) => {
     let fillColor = parseColor(options.fillColor);
 
     await execute(async () => {
+        console.log('[createDocument] Creating document with options:', options);
         await app.createDocument({
             typename: "DocumentCreateOptions",
             width: options.width,
@@ -348,9 +349,31 @@ const createDocument = async (command) => {
             profile: "sRGB IEC61966-2.1",
         });
 
+        // Логируем все слои
+        const allLayers = app.activeDocument.layers;
+        console.log('[createDocument] All layers after creation:', allLayers.map(l => l.name));
+
         let background = findLayer("Background");
-        background.allLocked = false;
+        console.log('[createDocument] Result of findLayer("Background"):', background);
+
+        if (!background) {
+            // Попробуем взять первый слой, если нет Background
+            if (allLayers.length > 0) {
+                background = allLayers[0];
+                console.log('[createDocument] Using first layer as background:', background.name);
+            } else {
+                throw new Error('[createDocument] No layers found after document creation');
+            }
+        }
+        try {
+            background.allLocked = false;
+            console.log('[createDocument] Set background.allLocked = false');
+        } catch (e) {
+            console.error('[createDocument] Error setting background.allLocked:', e);
+            throw e;
+        }
         background.name = "Background";
+        console.log('[createDocument] Set background.name = \"Background\"');
     });
 };
 

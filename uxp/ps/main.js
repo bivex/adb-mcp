@@ -49,21 +49,31 @@ const onCommandPacket = async (packet) => {
     };
 
     try {
-      
-      //this will throw if an active document is required and not open
-      checkRequiresActiveDocument(command)
+        console.log("[onCommandPacket] Received command:", JSON.stringify(command, null, 2));
 
-      let response = await parseAndRouteCommand(command);
+        // This will throw if an active document is required and not open
+        checkRequiresActiveDocument(command);
 
-      out.response = response;
-      out.status = "SUCCESS";
+        let response = await parseAndRouteCommand(command);
 
-      out.layers = await getLayers()
-      out.hasActiveSelection = hasActiveSelection()
+        console.log("[onCommandPacket] Command response:", JSON.stringify(response, null, 2));
+
+        out.response = response;
+        out.status = "SUCCESS";
+
+        out.layers = await getLayers();
+        out.hasActiveSelection = hasActiveSelection();
 
     } catch (e) {
+        // Enhanced error logging
+        console.error("[onCommandPacket] Error caught:", e);
+        if (e && e.stack) {
+            console.error("[onCommandPacket] Error stack:", e.stack);
+        }
         out.status = "FAILURE";
-        out.message = `Error calling ${command.action} : ${e}`;
+        out.message = `Error calling ${command && command.action ? command.action : "unknown"} : ${e && e.message ? e.message : e}`;
+        out.errorStack = e && e.stack ? e.stack : null;
+        out.command = command;
     }
 
     return out;

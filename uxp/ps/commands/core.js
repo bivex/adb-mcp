@@ -384,7 +384,7 @@ const commandHandlers = {
     cropDocument,
     removeBackground,
     alignContent,
-    generateImage,
+    // generateImage,
     saveDocument,
     saveDocumentAs,
     createDocument

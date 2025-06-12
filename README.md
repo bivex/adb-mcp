@@ -59,6 +59,11 @@ Download and install [Claude Desktop](https://claude.ai/download). Once you have
 
 Make sure you have Python3 installed and configured on your system (in your system PATH). This assumes you are using [uv](https://github.com/astral-sh/uv) for package management and have it setup and configured on your system.
 
+If `uv` is not installed, you can install it using pip:
+```bash
+pip install uv
+```
+
 Change to the mcp directory and start the dev server:
 
 #### Photoshop

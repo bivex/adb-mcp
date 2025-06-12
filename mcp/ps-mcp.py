@@ -49,7 +49,7 @@ socket_client.configure(
     timeout=PROXY_TIMEOUT
 )
 
-logger.log("socket_client configured")
+# logger.log("socket_client configured")
 
 @mcp.tool()
 def create_gradient_layer_style(
@@ -1337,8 +1337,13 @@ def sendCommand(command:dict):
     logger.log(f"Sending command: {command}")
     response = socket_client.send_message_blocking(command)
     
-    logger.log(f"Final response: {response['status']}")
-    return response
+    try:
+        response_json = json.loads(response)
+    except json.JSONDecodeError:
+        response_json = {"status": str(response)}
+
+    logger.log(f"Final response: {response_json['status']}")
+    return response_json
 
 def createCommand(action:str, options:dict) -> str:
     command = {

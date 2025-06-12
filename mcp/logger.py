@@ -22,7 +22,9 @@
 
 import sys
 
-def log(message, filter_tag="LOGGER"):
+IS_DEBUG = False
 
-    print(f"{filter_tag} : {message}", file=sys.stderr)
+def log(message, filter_tag="LOGGER"):
+    if IS_DEBUG:
+        print(f"{filter_tag} : {message}", file=sys.stderr)
 

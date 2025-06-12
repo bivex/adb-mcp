@@ -25,16 +25,8 @@ import requests
 import json
 import time
 import socket_client
-import logger
 import sys
 import os
-
-
-#logger.log(f"Python path: {sys.executable}")
-#logger.log(f"PYTHONPATH: {os.environ.get('PYTHONPATH')}")
-#logger.log(f"Current working directory: {os.getcwd()}")
-#logger.log(f"Sys.path: {sys.path}")
-
 
 mcp_name = "Adobe Photoshop MCP Server"
 mcp = FastMCP(mcp_name, log_level="INFO")
@@ -48,8 +40,6 @@ socket_client.configure(
     url=PROXY_URL,
     timeout=PROXY_TIMEOUT
 )
-
-# logger.log("socket_client configured")
 
 @mcp.tool()
 def create_gradient_layer_style(
@@ -1333,16 +1323,21 @@ def get_instructions() -> str:
 
 
 def sendCommand(command:dict):
-
-    logger.log(f"Sending command: {command}")
+    print(f"Sending command: {command}", file=sys.stderr)
     response = socket_client.send_message_blocking(command)
     
+    # Если переменная is_inspecting установлена, не валидируем JSON
+    is_inspecting = True
+    if is_inspecting:
+        print(f"Inspector mode: skipping JSON validation. Returning raw response.", file=sys.stderr)
+        return {"status": str(response)}
+
     try:
         response_json = json.loads(response)
     except json.JSONDecodeError:
         response_json = {"status": str(response)}
 
-    logger.log(f"Final response: {response_json['status']}")
+    print(f"Final response: {response_json['status']}", file=sys.stderr)
     return response_json
 
 def createCommand(action:str, options:dict) -> str:
@@ -1431,6 +1426,6 @@ blend_modes = [
 if __name__ == "__main__":
     try:
         mcp.run(transport='stdio')
-        logger.log("MCP server started successfully")
+        print("MCP server started successfully", file=sys.stderr)
     except Exception as e:
-        logger.log(f"Error running MCP server: {e}")
+        print(f"Error running MCP server: {e}", file=sys.stderr)

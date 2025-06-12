@@ -25,7 +25,7 @@ import time
 import threading
 import json
 from queue import Queue
-import logger
+import sys
 
 # Global configuration variables
 proxy_url = None
@@ -49,7 +49,7 @@ def send_message_blocking(command, timeout=None):
     
     # Check if configuration is set
     if not application or not proxy_url or not proxy_timeout:
-        logger.log("Socket client not configured. Call configure() first.")
+        print("Socket client not configured. Call configure() first.", file=sys.stderr)
         return None
     
     # Use provided timeout or default
@@ -65,10 +65,10 @@ def send_message_blocking(command, timeout=None):
 
     @sio.event
     def connect():
-        logger.log(f"Connected to server with session ID: {sio.sid}")
+        print(f"Connected to server with session ID: {sio.sid}", file=sys.stderr)
         
         # Send the command
-        logger.log(f"Sending message to {application}: {command}")
+        print(f"Sending message to {application}: {command}", file=sys.stderr)
         sio.emit('command_packet', {
             'type': "command",
             'application': application,
@@ -77,21 +77,21 @@ def send_message_blocking(command, timeout=None):
     
     @sio.event
     def packet_response(data):
-        logger.log(f"Received response: {data}")
+        print(f"Received response: {data}", file=sys.stderr)
         response_queue.put(data)
         # Disconnect after receiving the response
         sio.disconnect()
     
     @sio.event
     def disconnect():
-        logger.log("Disconnected from server")
+        print("Disconnected from server", file=sys.stderr)
         # If we disconnect without response, put None in the queue
         if response_queue.empty():
             response_queue.put(None)
     
     @sio.event
     def connect_error(error):
-        logger.log(f"Connection error: {error}")
+        print(f"Connection error: {error}", file=sys.stderr)
         connection_failed[0] = True
         response_queue.put(None)
     
@@ -102,7 +102,7 @@ def send_message_blocking(command, timeout=None):
             # Keep the client running until disconnect is called
             sio.wait()
         except Exception as e:
-            logger.log(f"Error: {e}")
+            print(f"Error: {e}", file=sys.stderr)
             connection_failed[0] = True
             if response_queue.empty():
                 response_queue.put(None)
@@ -116,18 +116,18 @@ def send_message_blocking(command, timeout=None):
     
     try:
         # Wait for a response or timeout
-        logger.log("waiting for response...")
+        print("waiting for response...", file=sys.stderr)
         response = response_queue.get(timeout=wait_timeout)
 
         if connection_failed[0]:
             raise RuntimeError(f"Error: Could not connect to {application} command proxy server. Make sure that the proxy server is running listening on the correct url {proxy_url}.")
 
         if response:
-            logger.log("response received...")
+            print("response received...", file=sys.stderr)
             try:
-                logger.log(json.dumps(response))
+                print(json.dumps(response), file=sys.stderr)
             except:
-                logger.log(f"Response (not JSON-serializable): {response}")
+                print(f"Response (not JSON-serializable): {response}", file=sys.stderr)
 
             if response["status"] == "FAILURE":
                 raise AppError(f"Error returned from {application}: {response['message']}")
@@ -136,7 +136,7 @@ def send_message_blocking(command, timeout=None):
     except AppError:
         raise
     except Exception as e:
-        logger.log(f"Error waiting for response: {e}")
+        print(f"Error waiting for response: {e}", file=sys.stderr)
         if sio.connected:
             sio.disconnect()
   
@@ -162,4 +162,4 @@ def configure(app=None, url=None, timeout=None):
     if timeout:
         proxy_timeout = timeout
     
-    logger.log(f"Socket client configured: app={application}, url={proxy_url}, timeout={proxy_timeout}")
+    print(f"Socket client configured: app={application}, url={proxy_url}, timeout={proxy_timeout}", file=sys.stderr)

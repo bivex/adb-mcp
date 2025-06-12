@@ -14,6 +14,7 @@
     ```bash
     pip install uv
     uv pip install mcp[cli]
+    uv pip install python-socketio
     ```
 
 #### Шаг 1: Настройка прокси-сервера команд Node.js

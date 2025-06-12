@@ -37,8 +37,7 @@ import os
 
 
 mcp_name = "Adobe Photoshop MCP Server"
-mcp = FastMCP(mcp_name, log_level="ERROR")
-print(f"{mcp_name} running on stdio", file=sys.stderr)
+mcp = FastMCP(mcp_name, log_level="INFO")
 
 APPLICATION = "photoshop"
 PROXY_URL = 'http://localhost:3001'
@@ -49,6 +48,8 @@ socket_client.configure(
     url=PROXY_URL,
     timeout=PROXY_TIMEOUT
 )
+
+logger.log("socket_client configured")
 
 @mcp.tool()
 def create_gradient_layer_style(
@@ -1333,7 +1334,7 @@ def get_instructions() -> str:
 
 def sendCommand(command:dict):
 
-
+    logger.log(f"Sending command: {command}")
     response = socket_client.send_message_blocking(command)
     
     logger.log(f"Final response: {response['status']}")
@@ -1421,3 +1422,10 @@ blend_modes = [
     "SUBTRACT",
     "VIVIDLIGHT"
 ]
+
+if __name__ == "__main__":
+    try:
+        mcp.run(transport='stdio')
+        logger.log("MCP server started successfully")
+    except Exception as e:
+        logger.log(f"Error running MCP server: {e}")

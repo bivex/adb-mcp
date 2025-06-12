@@ -129,6 +129,18 @@
 2.  Сервер узлов `adb-proxy-socket`.
 3.  Запустите Photoshop и/или Premiere.
 
+#### Настройка Cursor (дополнительно)
+
+```json
+"adb-mcp-photoshop": {
+  "command": "cmd",
+  "args": [ "/c", "C:\ProgramData\anaconda3\Scripts\uv.exe", "run", "C:\Users\Admin\Desktop\Dev\adb-mcp\mcp\ps-mcp.py" ],
+  "timeout": 1800,
+  "disabled": false,
+  "env": { "PYTHONUNBUFFERED": "1" }
+},
+```
+
 #### Photoshop
 4.  Запустите UXP Developer Tool и нажмите кнопку _"Загрузить"_ для _Photoshop MCP Agent_.
 5.  В Photoshop, если панель _MCP Agent_ не открыта, откройте _Плагины > Photoshop MCP Agent > Photoshop MCP Agent_.

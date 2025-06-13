@@ -226,46 +226,64 @@ const removeBackground = async (command) => {
 };
 
 const alignContent = async (command) => {
+    try {
+        const options = command.options;
+        const { layerName, alignmentMode } = options;
 
-    let options = command.options;
-    let layerName = options.layerName;
+        if (!layerName) {
+            throw new Error("[alignContent] 'layerName' option is required.");
+        }
+        if (!alignmentMode) {
+            throw new Error("[alignContent] 'alignmentMode' option is required.");
+        }
 
-    let layer = findLayer(layerName);
+        console.log(`[alignContent] Aligning layer "${layerName}" with mode "${alignmentMode}".`);
 
-    if (!layer) {
-        throw new Error(
-            `alignContent : Could not find layerName : ${layerName}`
-        );
-    }
+        const layer = findLayer(layerName);
+        if (!layer) {
+            throw new Error(`[alignContent] Could not find layer named: ${layerName}`);
+        }
 
-    if (!app.activeDocument.selection.bounds) {
-        throw new Error(`alignContent : Requires an active selection`);
-    }
+        if (!app.activeDocument || !app.activeDocument.selection.bounds) {
+            throw new Error("[alignContent] An active selection is required.");
+        }
 
-    await execute(async () => {
-        let m = getAlignmentMode(options.alignmentMode);
+        await execute(async () => {
+            const mode = getAlignmentMode(alignmentMode);
+            selectLayer(layer, true);
 
-        selectLayer(layer, true);
-
-        let commands = [
-            {
-                _obj: "align",
-                _target: [
-                    {
-                        _enum: "ordinal",
-                        _ref: "layer",
-                        _value: "targetEnum",
+            const commands = [
+                {
+                    _obj: "align",
+                    _target: [
+                        {
+                            _enum: "ordinal",
+                            _ref: "layer",
+                            _value: "targetEnum",
+                        },
+                    ],
+                    alignToCanvas: false,
+                    using: {
+                        _enum: "alignDistributeSelector",
+                        _value: mode,
                     },
-                ],
-                alignToCanvas: false,
-                using: {
-                    _enum: "alignDistributeSelector",
-                    _value: m,
                 },
-            },
-        ];
-        await action.batchPlay(commands, {});
-    });
+            ];
+            await action.batchPlay(commands, {});
+        });
+
+        const result = {
+            success: true,
+            layerName,
+            alignmentMode,
+        };
+        console.log("[alignContent] Alignment successful.", result);
+        return result;
+
+    } catch (err) {
+        console.error(`[alignContent] Failed to align content: ${err.message}`);
+        throw err;
+    }
 };
 
 const generateImage = async (command) => {
@@ -419,8 +437,16 @@ const createDocument = async (command) => {
                 console.warn('[createDocument] Could not unlock background layer:', e);
             }
             if (background.name !== "Background") {
-                background.name = "Background";
-                console.log('[createDocument] Renamed background layer to "Background"');
+                try {
+                    background.name = "Background";
+                    console.log('[createDocument] Renamed background layer to "Background"');
+                } catch (e) {
+                    if (e.message.includes("You cannot change the Background layer's name")) {
+                        console.warn(`[createDocument] Could not rename layer to "Background": ${e.message}`);
+                    } else {
+                        throw e;
+                    }
+                }
             }
 
             // Final log

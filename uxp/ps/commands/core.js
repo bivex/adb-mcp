@@ -334,7 +334,7 @@ const createDocument = async (command) => {
 
     let options = command.options;
     let colorMode = getNewDocumentMode(command.options.colorMode);
-    let fillColor = parseColor(options.fillColor);
+    // let fillColor = parseColor(options.fillColor); // No longer needed for transparent background
 
     await execute(async () => {
         console.log('[createDocument] Creating document with options:', options);
@@ -344,8 +344,8 @@ const createDocument = async (command) => {
             height: options.height,
             resolution: options.resolution,
             mode: colorMode,
-            fill: constants.DocumentFill.COLOR,
-            fillColor: fillColor,
+            fill: constants.DocumentFill.TRANSPARENT,
+            // fillColor: fillColor, // Remove this line for transparency
             profile: "sRGB IEC61966-2.1",
         });
 
@@ -373,7 +373,7 @@ const createDocument = async (command) => {
             throw e;
         }
         background.name = "Background";
-        console.log('[createDocument] Set background.name = \"Background\"');
+        console.log('[createDocument] Set background.name = "Background"');
     });
 };
 

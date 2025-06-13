@@ -127,43 +127,73 @@ const placeImage = async (command) => {
 
 
 const getDocumentInfo = async (command) => {
+    try {
+        if (!app.activeDocument) {
+            throw new Error('[getDocumentInfo] No active document found.');
+        }
+        const doc = app.activeDocument;
+        const path = doc.path;
+        const layers = doc.layers || [];
+        const activeLayer = doc.activeLayers && doc.activeLayers.length > 0 ? doc.activeLayers[0] : null;
 
-    let doc = app.activeDocument;
-    let path = doc.path;
-
-    let out = {
-        height: doc.height,
-        width: doc.width,
-        colorMode: doc.mode.toString(),
-        pixelAspectRatio: doc.pixelAspectRatio,
-        resolution: doc.resolution,
-        path: path,
-        saved: path.length > 0,
-        hasUnsavedChanges: !doc.saved,
-    };
-
-    return out;
+        const out = {
+            name: doc.name || null,
+            width: doc.width,
+            height: doc.height,
+            resolution: doc.resolution,
+            colorMode: doc.mode ? doc.mode.toString() : null,
+            pixelAspectRatio: doc.pixelAspectRatio,
+            path: path,
+            saved: path && path.length > 0,
+            hasUnsavedChanges: doc.saved === false,
+            numberOfLayers: layers.length,
+            activeLayerName: activeLayer ? activeLayer.name : null,
+            layerNames: layers.map(l => l.name),
+        };
+        console.log('[getDocumentInfo] Document info:', out);
+        return out;
+    } catch (err) {
+        console.error('[getDocumentInfo] Error:', err);
+        throw err;
+    }
 };
 
 const cropDocument = async (command) => {
+    try {
+        console.log("[cropDocument] Cropping document to selection.");
 
-    let options = command.options;
+        if (!hasActiveSelection()) {
+            throw new Error("[cropDocument] An active selection is required to crop the document.");
+        }
 
-    if (!hasActiveSelection()) {
-        throw new Error("cropDocument : Requires an active selection");
+        const doc = app.activeDocument;
+        const originalDimensions = { width: doc.width, height: doc.height };
+
+        await execute(async () => {
+            const commands = [
+                {
+                    _obj: "crop",
+                    delete: true,
+                },
+            ];
+            await action.batchPlay(commands, {});
+        });
+
+        const newDimensions = { width: doc.width, height: doc.height };
+
+        const result = {
+            success: true,
+            originalDimensions,
+            newDimensions,
+        };
+
+        console.log("[cropDocument] Document cropped successfully.", result);
+        return result;
+
+    } catch (err) {
+        console.error(`[cropDocument] Failed to crop document: ${err.message}`);
+        throw err; // Re-throw to allow further handling up the chain
     }
-
-    return await execute(async () => {
-        let commands = [
-            // Crop
-            {
-                _obj: "crop",
-                delete: true,
-            },
-        ];
-
-        await action.batchPlay(commands, {});
-    });
 };
 
 
@@ -331,49 +361,81 @@ const saveDocumentAs = async (command) => {
 };
 
 const createDocument = async (command) => {
+    const options = command.options;
+    // Parameter validation
+    const requiredFields = ["width", "height", "resolution", "colorMode", "fillColor"];
+    for (const field of requiredFields) {
+        if (options[field] === undefined || options[field] === null) {
+            throw new Error(`[createDocument] Missing required option: ${field}`);
+        }
+    }
 
-    let options = command.options;
-    let colorMode = getNewDocumentMode(command.options.colorMode);
-    let fillColor = parseColor(options.fillColor);
+    let colorMode, fillColor;
+    try {
+        colorMode = getNewDocumentMode(options.colorMode);
+    } catch (e) {
+        throw new Error(`[createDocument] Invalid colorMode: ${options.colorMode}`);
+    }
+    try {
+        fillColor = parseColor(options.fillColor);
+    } catch (e) {
+        throw new Error(`[createDocument] Invalid fillColor: ${JSON.stringify(options.fillColor)}`);
+    }
 
     await execute(async () => {
-        console.log('[createDocument] Creating document with options:', options);
-        await app.createDocument({
-            typename: "DocumentCreateOptions",
-            width: options.width,
-            height: options.height,
-            resolution: options.resolution,
-            mode: colorMode,
-            fill: constants.DocumentFill.COLOR,
-            fillColor: fillColor,
-            profile: "sRGB IEC61966-2.1",
-        });
+        try {
+            console.log('[createDocument] Creating document with options:', options);
+            await app.createDocument({
+                typename: "DocumentCreateOptions",
+                width: options.width,
+                height: options.height,
+                resolution: options.resolution,
+                mode: colorMode,
+                fill: constants.DocumentFill.COLOR,
+                fillColor: fillColor,
+                profile: "sRGB IEC61966-2.1",
+            });
 
-        // Логируем все слои
-        const allLayers = app.activeDocument.layers;
-        console.log('[createDocument] All layers after creation:', allLayers.map(l => l.name));
-
-        let background = findLayer("Background");
-        console.log('[createDocument] Result of findLayer("Background"):', background);
-
-        if (!background) {
-            // Попробуем взять первый слой, если нет Background
-            if (allLayers.length > 0) {
-                background = allLayers[0];
-                console.log('[createDocument] Using first layer as background:', background.name);
-            } else {
+            // Ensure at least one layer exists
+            const allLayers = app.activeDocument.layers;
+            if (!allLayers || allLayers.length === 0) {
                 throw new Error('[createDocument] No layers found after document creation');
             }
+
+            // Try to find or create a background layer
+            let background = findLayer("Background");
+            if (!background) {
+                background = allLayers[0];
+                console.log('[createDocument] No "Background" layer found, using first layer:', background.name);
+            }
+
+            // Unlock and rename background layer
+            try {
+                if (background.allLocked) {
+                    background.allLocked = false;
+                    console.log('[createDocument] Unlocked background layer');
+                }
+            } catch (e) {
+                console.warn('[createDocument] Could not unlock background layer:', e);
+            }
+            if (background.name !== "Background") {
+                background.name = "Background";
+                console.log('[createDocument] Renamed background layer to "Background"');
+            }
+
+            // Final log
+            console.log('[createDocument] Document created successfully.');
+            return {
+                width: options.width,
+                height: options.height,
+                resolution: options.resolution,
+                colorMode: colorMode,
+                backgroundLayer: background.name
+            };
+        } catch (err) {
+            console.error('[createDocument] Error:', err);
+            throw err;
         }
-        try {
-            background.allLocked = false;
-            console.log('[createDocument] Set background.allLocked = false');
-        } catch (e) {
-            console.error('[createDocument] Error setting background.allLocked:', e);
-            throw e;
-        }
-        background.name = "Background";
-        console.log('[createDocument] Set background.name = \"Background\"');
     });
 };
 

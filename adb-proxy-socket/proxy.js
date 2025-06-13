@@ -24,106 +24,126 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { transports: ["websocket"] }); // Enforce WebSockets
+const io = new Server(server, { transports: ["websocket"] });
 
-const PORT = 3001
-// Track clients by application
-const applicationClients = {};
+const PORT = 3001;
 
-io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
-  
-  socket.on('register', ({ application }) => {
-    console.log(`Client ${socket.id} registered for application: ${application}`);
-    
-    // Store the application preference with this socket
-    socket.data.application = application;
-    
-    // Register this client for this application
-    if (!applicationClients[application]) {
-      applicationClients[application] = new Set();
+/**
+ * Tracks clients by application using a Map for better performance.
+ * @type {Map<string, Set<string>>}
+ */
+const applicationClients = new Map();
+
+/**
+ * Registers a client for a specific application.
+ * @param {string} application
+ * @param {string} socketId
+ */
+const registerClient = (application, socketId) => {
+  if (!applicationClients.has(application)) {
+    applicationClients.set(application, new Set());
+  }
+  applicationClients.get(application).add(socketId);
+};
+
+/**
+ * Removes a client from all application registrations.
+ * @param {string} socketId
+ */
+const removeClient = (socketId) => {
+  for (const [app, clients] of applicationClients.entries()) {
+    clients.delete(socketId);
+    if (clients.size === 0) {
+      applicationClients.delete(app);
     }
-    applicationClients[application].add(socket.id);
-    
-    // Optionally confirm registration
-    socket.emit('registration_response', { 
-      type: 'registration', 
-      status: 'success', 
-      message: `Registered for ${application}` 
-    });
-  });
+  }
+};
 
-  socket.on('command_packet_response', ({ packet }) => {
-    const senderId = packet.senderId;
-  
-    if (senderId) {
-      
-      io.to(senderId).emit('packet_response', packet);
-      console.log(`Sent confirmation to client ${senderId}`);
-    } else {
-      console.log(`No sender ID provided in packet`);
-    }
-  });
-
-  socket.on('command_packet', ({ application, command }) => {
-    console.log(`Command from ${socket.id} for application ${application}:`, command);
-    
-    // Register this client for this application if not already registered
-    //if (!applicationClients[application]) {
-    //  applicationClients[application] = new Set();
-    //}
-    //applicationClients[application].add(socket.id);
-    
-    // Process the command
-
-    let packet = {
-        senderId:socket.id,
-        application:application,
-        command:command
-    }
-
-    sendToApplication(packet)
-    
-    // Send response back to this client
-    //socket.emit('json_response', { from: 'server', command });
-  });
-  
-  socket.on('disconnect', () => {
-    console.log(`User disconnected: ${socket.id}`);
-    
-    // Remove this client from all application registrations
-    for (const app in applicationClients) {
-      applicationClients[app].delete(socket.id);
-      // Clean up empty sets
-      if (applicationClients[app].size === 0) {
-        delete applicationClients[app];
-      }
-    }
-  });
-});
-
-// Add a function to send messages to clients by application
-function sendToApplication(packet) {
-
-    let application = packet.application
-    if (applicationClients[application]) {
-        console.log(`Sending to ${applicationClients[application].size} clients for ${application}`);
-    
-        let senderId = packet.senderId
-        // Loop through all client IDs for this application
-        applicationClients[application].forEach(clientId => {
-            io.to(clientId).emit('command_packet', packet);
+/**
+ * Sends a packet to all clients registered for a specific application.
+ * @param {object} packet
+ * @returns {boolean}
+ */
+const sendToApplication = (packet) => {
+  const { application, senderId } = packet;
+  const clients = applicationClients.get(application);
+  if (clients && clients.size > 0) {
+    console.log(`Sending to ${clients.size} clients for ${application}`);
+    clients.forEach(clientId => {
+      io.to(clientId).emit('command_packet', packet);
     });
     return true;
   }
   console.log(`No clients registered for application: ${application}`);
   return false;
-}
+};
 
-// Example: Use this function elsewhere in your code
-// sendToApplication('photoshop', { message: 'Update available' });
+/**
+ * Validates that a value is a non-empty string.
+ * @param {any} value
+ * @returns {boolean}
+ */
+const isNonEmptyString = value => typeof value === 'string' && value.trim().length > 0;
+
+// Middleware for logging connections/disconnections
+io.use((socket, next) => {
+  console.log(`Socket middleware: ${socket.id}`);
+  next();
+});
+
+io.on('connection', (socket) => {
+  console.log(`User connected: ${socket.id}`);
+
+  socket.on('register', ({ application }) => {
+    if (!isNonEmptyString(application)) {
+      socket.emit('registration_response', {
+        type: 'registration',
+        status: 'error',
+        message: 'Invalid application name.'
+      });
+      return;
+    }
+    registerClient(application, socket.id);
+    socket.data.application = application;
+    socket.emit('registration_response', {
+      type: 'registration',
+      status: 'success',
+      message: `Registered for ${application}`
+    });
+    console.log(`Client ${socket.id} registered for application: ${application}`);
+  });
+
+  socket.on('command_packet_response', ({ packet }) => {
+    if (!packet || !isNonEmptyString(packet.senderId)) {
+      console.log('Invalid packet or missing senderId in command_packet_response');
+      return;
+    }
+    io.to(packet.senderId).emit('packet_response', packet);
+    console.log(`Sent confirmation to client ${packet.senderId}`);
+  });
+
+  socket.on('command_packet', ({ application, command }) => {
+    if (!isNonEmptyString(application) || typeof command !== 'object') {
+      console.log('Invalid application or command in command_packet');
+      return;
+    }
+    const packet = {
+      senderId: socket.id,
+      application,
+      command
+    };
+    sendToApplication(packet);
+    console.log(`Command from ${socket.id} for application ${application}:`, command);
+  });
+
+  socket.on('disconnect', () => {
+    removeClient(socket.id);
+    console.log(`User disconnected: ${socket.id}`);
+  });
+});
 
 server.listen(PORT, () => {
   console.log(`adb-mcp Command proxy server running on ws://localhost:${PORT}`);
